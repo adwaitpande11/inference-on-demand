@@ -130,7 +130,6 @@ EC2 `running` in AWS does not mean Ollama is ready. There is a ~30-60 second gap
 - Host apps only listen for these events — they never hardcode the endpoint, subdomain, or IP
 
 ### Security Group
-- Port 11434 restricted to the owner's IP only via Security Group
 - EC2 has no public SSH access in production
 - Ollama is configured with `OLLAMA_HOST=0.0.0.0:11434` and `OLLAMA_ORIGINS=*`
 
