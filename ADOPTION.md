@@ -62,15 +62,6 @@ Stage 6 — Daily usage             (seconds)
 8. Select **Application running outside AWS**
 9. Download or copy the **Access Key ID** and **Secret Access Key** — you will add these to Terraform Cloud in Stage 2
 
-### 1.2 — Find your public IP
-
-You will need this to restrict Ollama's port to your IP only. Visit either of these in your browser:
-
-- https://checkip.amazonaws.com
-- https://whatismyip.com
-
-Note it down in the format `x.x.x.x/32` — you will use it in Stage 5.
-
 ---
 
 ## Stage 2 — Terraform Cloud Setup
@@ -255,7 +246,6 @@ Edit `infra/terraform.tfvars` and fill in your values:
 ```hcl
 aws_region          = "ap-south-1"
 instance_type       = "c5.2xlarge"
-your_ip             = "x.x.x.x/32"        # from Stage 1.2
 cloudflare_zone_id  = "your-zone-id"       # from Stage 3.3
 subdomain           = "inference"           # becomes inference.yourdomain.com
 domain              = "yourdomain.com"
@@ -301,7 +291,7 @@ terraform apply
 
 Review the plan and type `yes` when prompted. This creates:
 - IAM role and policy for Lambda
-- Security Group (port 11434 restricted to your IP)
+- Security Group (port 11434)
 - Lambda functions (start, stop, status, authorizer)
 - API Gateway with Basic Auth
 
@@ -361,10 +351,6 @@ window.addEventListener('ollamaOffline', () => {
 **`inference.yourdomain.com` does not resolve after instance is ready**
 - Cloudflare DNS TTL is 60 seconds — wait a minute and retry
 - Verify the A record was created in Cloudflare dashboard → DNS
-
-**Inference calls return connection refused**
-- Confirm the Security Group allows port 11434 from your current IP
-- Your IP may have changed — update `your_ip` in `terraform.tfvars` and run `terraform apply` in `infra/`
 
 **SSM Session Manager connect button is greyed out**
 - Verify the instance has the `ec2-ssm-role` IAM profile attached
