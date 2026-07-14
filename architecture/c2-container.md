@@ -13,21 +13,17 @@ graph TD
         Authorizer["Lambda Authorizer\nPython\nBasic Auth validator"]
 
         subgraph lambdas["Lambda Functions (Python)"]
-            StartFn["start.py\nTriggers terraform apply\nvia TF Cloud API"]
-            StopFn["stop.py\nTriggers terraform destroy\nvia TF Cloud API"]
-            StatusFn["status.py\nPolls TF Cloud run state"]
+            StartFn["start.py\nrun_instances via boto3\nCreate A record via CF API\nWrite state to SSM"]
+            StopFn["stop.py\nterminate_instances via boto3\nDelete A record via CF API\nClear state from SSM"]
+            StatusFn["status.py\ndescribe_instances via boto3\nReturns EC2 state + public IP"]
         end
 
-        subgraph ec2["EC2 — c5.2xlarge (ephemeral)"]
+        subgraph ec2["EC2 (ephemeral)"]
             Ollama["Ollama\nHTTP API :11434\nsystemd service"]
             Model["LLM Model\npre-pulled on AMI"]
         end
 
-        SSM["SSM Parameter Store\nAMI ID, instance type\nsecurity group ID"]
-    end
-
-    subgraph tfcloud["Terraform Cloud"]
-        Workspace["Workspace\nRemote state\napply / destroy runs"]
+        SSM["SSM Parameter Store\nRuntime config + secrets\nActive instance state"]
     end
 
     CF["Cloudflare DNS\nA record\nollama.yourdomain.com"]
@@ -39,12 +35,14 @@ graph TD
     APIGW -->|"Route"| StartFn
     APIGW -->|"Route"| StopFn
     APIGW -->|"Route"| StatusFn
-    StartFn -->|"Read config"| SSM
-    StartFn -->|"Trigger apply run"| Workspace
-    StopFn -->|"Trigger destroy run"| Workspace
-    StatusFn -->|"Poll run status"| Workspace
-    Workspace -->|"Provision EC2\nfrom custom AMI"| ec2
-    Workspace -->|"Create A record\nusing EC2 public IP output"| CF
+    StartFn -->|"Read config\nWrite instance state"| SSM
+    StopFn -->|"Read instance state\nClear after stop"| SSM
+    StatusFn -->|"Read instance ID"| SSM
+    StartFn -->|"run_instances\ndescribe_instances"| ec2
+    StopFn -->|"terminate_instances"| ec2
+    StatusFn -->|"describe_instances"| ec2
+    StartFn -->|"POST create A record"| CF
+    StopFn -->|"DELETE A record"| CF
     Widget -->|"Poll :11434 until 200 OK\nfire ollamaReady event"| Ollama
     Developer -->|"Direct inference\nollama.yourdomain.com:11434"| Ollama
     Ollama -->|"Load and serve"| Model
@@ -54,22 +52,21 @@ graph TD
 
 | Container | Technology | Responsibility |
 |---|---|---|
-| Embeddable widget | Plain JS + Bootstrap | Renders Start/Stop button, polls status, fires `ollamaReady` event |
+| Embeddable widget | Plain JS + Bootstrap | Renders Start/Stop button, polls status, fires `ollamaReady` / `ollamaOffline` events |
 | API Gateway | AWS HTTP API | Routes lifecycle calls, enforces auth via Lambda Authorizer |
-| Lambda Authorizer | Python | Validates Basic Auth header against credentials in environment |
-| start.py | Python / Lambda | Reads config from SSM, triggers `terraform apply` via TF Cloud API |
-| stop.py | Python / Lambda | Triggers `terraform destroy` via TF Cloud API |
-| status.py | Python / Lambda | Polls Terraform Cloud run status, returns state to widget |
-| SSM Parameter Store | AWS SSM | Stores AMI ID, instance type, security group ID — read by Lambda at runtime |
-| Terraform Cloud workspace | Terraform | Holds remote state, executes apply/destroy, provisions EC2 + Cloudflare record |
+| Lambda Authorizer | Python | Validates Basic Auth header against credentials in SSM |
+| start.py | Python / Lambda | Reads config from SSM, calls `run_instances`, creates Cloudflare A record, writes instance state to SSM |
+| stop.py | Python / Lambda | Reads instance state from SSM, deletes Cloudflare A record, calls `terminate_instances`, clears SSM state |
+| status.py | Python / Lambda | Reads instance ID from SSM, calls `describe_instances`, returns current state and public IP |
+| SSM Parameter Store | AWS SSM | Stores all runtime config, secrets, and active instance state (`instance_id`, `dns_record_id`) |
 | EC2 instance | Amazon Linux 2023 | Runs Ollama as a systemd service, serves inference on :11434 |
-| Ollama | Ollama runtime | Loads pre-pulled model, exposes OpenAI-compatible HTTP API |
+| Ollama | Ollama runtime | Loads pre-pulled model, exposes HTTP API |
 | Cloudflare DNS | Cloudflare | Resolves `ollama.yourdomain.com` to EC2 public IP (TTL 60s) |
 
 ## Notes
 
-- API Gateway and all Lambda functions are **persistent** — provisioned once via `terraform apply` in `infra/`
-- EC2 and the Cloudflare A record are **ephemeral** — created and destroyed per session by the Terraform Cloud workspace
-- The widget polls Ollama directly on `:11434` to detect readiness — Lambda is not in the health-check path
-- SSM Parameter Store decouples AMI ID from Lambda code — update the AMI without redeploying Lambda
-- Security Group restricts port 11434 to the developer's IP only — Ollama has no application-level auth
+- **No Terraform at runtime** — EC2 and DNS are managed directly by Lambda via boto3 and Cloudflare API. Terraform is only used for persistent infra (`infra/`), applied once.
+- **SSM is the runtime state store** — `start.py` writes `instance_id` and `dns_record_id` to SSM; `stop.py` reads and clears them. No external database needed.
+- **Inference is always direct** — the browser calls Ollama at `ollama.yourdomain.com:11434`. Lambda is never in the inference path.
+- **Two-stage polling** — the widget first polls `/status` (EC2 state via `describe_instances`), then polls Ollama directly on `:11434`. These are separate checks — EC2 running does not mean Ollama is ready.
+- **Stop is fast** — terminating an instance and deleting a DNS record via API calls takes ~10-30 seconds, vs 2-3 minutes for a Terraform destroy run.

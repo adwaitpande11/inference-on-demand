@@ -9,21 +9,20 @@ graph TD
         Lambda["AWS Lambda\nLifecycle API"]
     end
 
-    TFCloud["Terraform Cloud\nState + apply / destroy"]
-    EC2["AWS EC2\nOllama inference endpoint\ncustom AMI, ephemeral"]
+    AWS["AWS EC2\nOllama inference endpoint\ncustom AMI, ephemeral"]
     CF["Cloudflare DNS\nA record → EC2 public IP"]
 
     Developer -->|"Start / Stop"| Widget
     Widget -->|"HTTP + Basic Auth"| Lambda
-    Lambda -->|"Trigger apply / destroy"| TFCloud
-    TFCloud -->|"Provision EC2 instance"| EC2
-    TFCloud -->|"Create / remove A record\nusing EC2 public IP output"| CF
-    Developer -->|"Direct inference calls\nollama.yourdomain.com:11434"| EC2
+    Lambda -->|"run_instances /\nterminate_instances"| AWS
+    Lambda -->|"Create / delete A record\nvia Cloudflare API"| CF
+    Developer -->|"Direct inference calls\nollama.yourdomain.com:11434"| AWS
 ```
 
 ## Notes
 
 - Inference traffic goes directly from the browser to EC2 — Lambda is not in the inference path (avoids 15-min timeout limitation)
-- Cloudflare DNS is managed entirely by Terraform Cloud using `aws_instance.ollama.public_ip` as input — EC2 has no direct relationship with Cloudflare
-- EC2 is terminated (not stopped) on destroy — every session starts from a clean AMI
-- No Elastic IP — the A record is recreated on every `terraform apply` with the new public IP (TTL = 60s)
+- Lambda manages EC2 lifecycle via boto3 and DNS via Cloudflare API directly — no Terraform at runtime
+- EC2 is terminated (not stopped) on every session end — every session starts from a clean AMI
+- No Elastic IP — Cloudflare A record is created on start with the new public IP and deleted on stop (TTL = 60s)
+- Terraform Cloud is used only for persistent infra (`infra/`) and does not appear at runtime
