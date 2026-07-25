@@ -1,0 +1,3 @@
+aws_region           = "ap-south-1"
+tf_cloud_org         = "your-terraform-cloud-org"
+tf_cloud_workspace   = "inference-on-demand"
