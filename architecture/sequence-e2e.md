@@ -6,16 +6,16 @@ sequenceDiagram
     participant Widget as inference-widget.js
     participant API as API Gateway + Lambda
     participant SSM as SSM Parameter Store
-    participant EC2 as AWS EC2
-    participant CF as Cloudflare DNS
+    participant EC2 as AWS EC2 (boto3)
+    participant CF as Cloudflare DNS API
     participant Ollama as Ollama :11434
 
     Note over Widget: State: UNKNOWN
 
     Dev->>Widget: Page loads (script tag)
     Widget->>API: GET /status
-    API->>SSM: Read active-instance-id
-    SSM-->>API: (empty)
+    API->>EC2: describe_instances\nFilter: tag ManagedBy=inference-on-demand\nstate: pending | running
+    EC2-->>API: No matching instances
     API-->>Widget: { status: "terminated" }
 
     Note over Widget: State: TERMINATED
@@ -28,29 +28,27 @@ sequenceDiagram
     Note over Widget: Renders [Starting...] (disabled)
 
     Widget->>API: POST /start (Basic Auth)
-    API->>SSM: Read config (AMI ID, instance type,\nsubnet, security group,\nCF token, zone ID, subdomain)
-    SSM-->>API: Config values
-    API->>EC2: run_instances()
-    EC2-->>API: { instance_id: "i-xxx" }
+    API->>SSM: GetParameters\n(AMI ID, instance type, subnet,\nsecurity group, CF token,\nzone ID, subdomain, domain)
+    SSM-->>API: Config + secrets
+    API->>EC2: run_instances(\n  ImageId, InstanceType,\n  SubnetId, SecurityGroupIds,\n  Tag: ManagedBy=inference-on-demand\n)
+    EC2-->>API: { InstanceId: "i-xxx" }
 
     loop Every 5s — EC2 Poller
         Widget->>API: GET /status
-        API->>SSM: Read active-instance-id
-        API->>EC2: describe_instances(i-xxx)
+        API->>EC2: describe_instances\nFilter: tag + state pending|running
         EC2-->>API: { state: "pending" }
         API-->>Widget: { status: "pending" }
     end
 
-    EC2-->>API: { state: "running", public_ip: "x.x.x.x" }
-    API->>CF: POST /zones/{id}/dns_records\n{ type: A, name: subdomain, content: x.x.x.x, ttl: 60 }
-    CF-->>API: { record_id: "cf-yyy" }
-    API->>SSM: Write active-instance-id = i-xxx\nWrite active-dns-record-id = cf-yyy
+    EC2-->>API: { state: "running", PublicIpAddress: "x.x.x.x" }
+    API->>CF: POST /zones/{zone_id}/dns_records\n{ type: "A", name: "inference.yourdomain.com",\n  content: "x.x.x.x", ttl: 60 }
+    CF-->>API: { id: "cf-yyy" }
     API-->>Widget: { status: "running", ip: "x.x.x.x" }
 
     Note over Widget: EC2 running — switch to Ollama poller
 
     loop Every 5s — Ollama Health Poller
-        Widget->>Ollama: GET ollama.yourdomain.com:11434/
+        Widget->>Ollama: GET inference.yourdomain.com:11434/
         Ollama-->>Widget: Connection refused (still loading)
     end
 
@@ -58,13 +56,11 @@ sequenceDiagram
 
     Note over Widget: State: READY
     Note over Widget: Renders [■ Stop] button + endpoint URL
-    Widget->>Dev: fires window event ollamaReady\n{ endpoint: "http://ollama.yourdomain.com:11434" }
+    Widget->>Dev: fires window event ollamaReady\n{ endpoint: "http://inference.yourdomain.com:11434" }
 
     Note over Dev,Ollama: ── INFERENCE FLOW ──
 
-    Dev->>Ollama: POST /api/generate { stream: false }
-    Ollama-->>Dev: 200 OK — complete JSON response
-    Dev->>Ollama: POST /api/generate { stream: false }
+    Dev->>Ollama: POST /api/generate\n{ model, prompt, stream: false }
     Ollama-->>Dev: 200 OK — complete JSON response
 
     Note over Dev,Ollama: ── STOP FLOW ──
@@ -74,13 +70,16 @@ sequenceDiagram
     Note over Widget: Renders [Stopping...] (disabled)
 
     Widget->>API: POST /stop (Basic Auth)
-    API->>SSM: Read active-instance-id + active-dns-record-id
-    SSM-->>API: { instance_id: "i-xxx", dns_record_id: "cf-yyy" }
-    API->>CF: DELETE /zones/{id}/dns_records/cf-yyy
+    API->>SSM: GetParameters (CF token, zone ID)
+    SSM-->>API: Secrets
+    API->>EC2: describe_instances\nFilter: tag ManagedBy=inference-on-demand\nstate: running
+    EC2-->>API: { InstanceId: "i-xxx" }
+    API->>CF: GET /zones/{zone_id}/dns_records\n?name=inference.yourdomain.com
+    CF-->>API: { id: "cf-yyy" }
+    API->>CF: DELETE /zones/{zone_id}/dns_records/cf-yyy
     CF-->>API: 200 OK
     API->>EC2: terminate_instances(i-xxx)
     EC2-->>API: { state: "shutting-down" }
-    API->>SSM: Clear active-instance-id\nClear active-dns-record-id
     API-->>Widget: { status: "terminated" }
 
     Note over Widget: State: TERMINATED
@@ -90,9 +89,10 @@ sequenceDiagram
 
 ## Notes
 
-- **Two-stage polling during start:** The widget first polls `GET /status` (EC2 state via `describe_instances`) until EC2 is `running`, then switches to polling Ollama directly on `:11434`. These are separate checks — EC2 `running` does not mean Ollama is ready to serve.
-- **Inference is always direct:** The Developer's inference calls go straight to `ollama.yourdomain.com:11434` — Lambda and API Gateway are never in the inference path.
-- **DNS propagation gap:** After `start.py` creates the Cloudflare A record, there is a ~60 second TTL window before the subdomain resolves. The Ollama Health Poller handles this naturally — it retries on any failure regardless of the reason.
-- **Stop is fast:** Deleting a DNS record and terminating an EC2 instance via direct API calls completes in ~10-30 seconds.
-- **SSM as state store:** `start.py` writes `instance_id` and `dns_record_id` to SSM immediately after provisioning. `stop.py` reads these to know what to tear down. `status.py` reads `instance_id` to know whether an active session exists.
-- **Page reload resilience:** If the developer reloads the page mid-session, the widget calls `GET /status` on load. `status.py` reads `instance_id` from SSM and calls `describe_instances` — if the instance is running, the widget recovers to STARTING or READY without requiring a new launch.
+- **Tag-based lookup** — EC2 instances are tagged `ManagedBy=inference-on-demand` at launch. `stop.py` and `status.py` always query by tag — no instance ID stored in SSM.
+- **Cloudflare record lookup on stop** — `stop.py` queries Cloudflare by subdomain name to get the record ID — no record ID stored in SSM.
+- **Two-stage polling** — EC2 Poller waits for `running` state. Ollama Health Poller then waits for 200 OK directly on `:11434`. ~30–60s gap between the two while the model loads.
+- **DNS propagation** — Cloudflare A record is created once EC2 is `running`. TTL 60s. The Ollama Health Poller absorbs the propagation gap naturally.
+- **Stop is fast** — `DELETE` on Cloudflare API + `terminate_instances` via boto3 completes in ~10–30 seconds.
+- **Inference is direct** — Developer calls `inference.yourdomain.com:11434` directly. Lambda is never in the inference path.
+- **Page reload resilience** — Widget calls `GET /status` on load. `status.py` queries EC2 by tag — if an instance is running, widget recovers to STARTING or READY without a new launch.

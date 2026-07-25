@@ -4,30 +4,34 @@ Ephemeral, private LLM inference on AWS — spins up when you need it, gone when
 
 No always-on servers. No idle costs. One click to start, one click to destroy.
 
+> Built on AWS with Cloudflare DNS as the reference implementation. The provider abstraction makes it portable — see [Provider Architecture](architecture/provider-architecture.md) to add support for other clouds or DNS providers.
+
 ---
 
 ## How It Works
 
 ```
 Browser Widget
-    ├── [Start] → API Gateway → Lambda → boto3 (run_instances) + Cloudflare API (create A record)
+    ├── [Start] → API Gateway → Lambda → boto3 run_instances()
+    │                                  → Cloudflare API create A record
     │                               ↓
     │                       EC2 boots from custom AMI
     │                       Ollama starts automatically
-    │                       ollama.yourdomain.com → EC2 public IP
+    │                       inference.yourdomain.com → EC2 public IP
     │
-    └── [Ready] → inference calls go direct to ollama.yourdomain.com:11434
+    └── [Ready] → inference calls go direct to inference.yourdomain.com:11434
 ```
 
 ```
 Browser Widget
-    └── [Stop] → API Gateway → Lambda → boto3 (terminate_instances) + Cloudflare API (delete A record)
-                                    ↓
-                            EC2 terminated
-                            DNS record removed
+    └── [Stop] → API Gateway → Lambda → Cloudflare API delete A record
+                                      → boto3 terminate_instances()
+                                   ↓
+                           EC2 terminated
+                           DNS record removed
 ```
 
-Lambda manages the full lifecycle directly — no Terraform at runtime. The browser widget handles the rest.
+Lambda manages the full lifecycle directly via boto3 and the Cloudflare API. No Terraform at runtime.
 
 ---
 
@@ -58,7 +62,7 @@ You pay only for the time the instance is actually running. A typical session of
 - AWS account
 - Cloudflare account with a domain
 - Terraform Cloud account (free tier is fine)
-- Terraform CLI installed locally (for one-time infra deployment)
+- Terraform CLI installed locally
 
 ---
 
@@ -68,27 +72,37 @@ You pay only for the time the instance is actually running. A typical session of
 inference-on-demand/
 ├── .github/
 │   └── copilot-instructions.md
-├── architecture/               # Architecture diagrams (Mermaid)
-│   ├── c1-system-context.md
-│   ├── c2-container.md
-│   ├── c3-widget-components.md
-│   ├── sequence-e2e.md
-│   └── state-diagram.md
-├── infra/                      # Terraform — persistent resources (one-time deploy)
-│   ├── main.tf                 # IAM, Security Group, API Gateway, Lambda
-│   ├── variables.tf
-│   ├── outputs.tf
-│   └── providers.tf
-├── lambda/                     # Python — lifecycle triggers
-│   ├── authorizer.py           # Basic Auth Lambda Authorizer
-│   ├── start.py                # boto3 run_instances + Cloudflare create A record
-│   ├── stop.py                 # boto3 terminate_instances + Cloudflare delete A record
-│   └── status.py               # describe_instances + Ollama health check
+├── architecture/
+│   ├── c1-system-context.md            # System context
+│   ├── c2-container.md                 # Container view (AWS)
+│   ├── c3-widget-components.md         # Widget internals
+│   ├── sequence-e2e.md                 # End-to-end sequence (AWS)
+│   ├── state-diagram.md                # Widget state machine
+│   ├── provider-architecture.md        # Provider abstraction layers
+│   └── aws/
+│       └── deployment-aws.md           # AWS Terraform deployment diagram
+├── deploy/
+│   └── aws/                            # Terraform — AWS persistent resources
+│       ├── main.tf
+│       ├── variables.tf
+│       ├── outputs.tf
+│       └── providers.tf
+├── api/
+│   ├── start.py                        # Launch EC2 + create DNS record
+│   ├── stop.py                         # Delete DNS record + terminate EC2
+│   ├── status.py                       # EC2 state + Ollama health
+│   ├── authorizer.py                   # Basic Auth
+│   ├── providers/
+│   │   ├── base.py                     # Abstract ComputeProvider
+│   │   └── aws_ec2.py                  # boto3 EC2 implementation
+│   └── dns/
+│       ├── base.py                     # Abstract DNSProvider
+│       └── cloudflare.py               # Cloudflare HTTP API implementation
 ├── widget/
-│   ├── inference-widget.js     # Embeddable JS widget
-│   └── demo.html               # Standalone test page
+│   ├── inference-widget.js             # Embeddable JS widget
+│   └── demo.html                       # Standalone test page
 ├── scripts/
-│   └── build-ami.sh            # One-time AMI build script
+│   └── build-ami.sh                    # One-time AMI build script
 └── README.md
 ```
 
@@ -102,24 +116,22 @@ For step-by-step setup instructions, see [ADOPTION.md](ADOPTION.md).
 
 ## Adapting This Project
 
-This project is intentionally not tied to a specific model, runtime, or instance size. To adapt it:
+**Different model** — modify `scripts/build-ami.sh` to pull a different model before snapshotting.
 
-**Different model** — modify `build-ami.sh` to pull a different model before snapshotting.
+**Different inference runtime** — replace Ollama with any runtime that exposes an HTTP API. Update the health check in `api/status.py` and `widget/inference-widget.js`.
 
-**Different inference runtime** — replace Ollama with any runtime that exposes an HTTP API. Update the health check URL in `status.py` and `inference-widget.js` accordingly.
+**Instance size** — choose based on your model. Smaller models (1B–3B) run comfortably on CPU instances with 16GB RAM. Larger models benefit from more RAM or a GPU instance. Set `instance_type` in SSM Parameter Store.
 
-**Instance size** — choose based on your model's requirements. Smaller models (1B–3B) run comfortably on CPU instances with 16GB RAM. Larger models benefit from more RAM or a GPU instance. Change the `instance_type` SSM parameter.
+**Different cloud provider** — implement `ComputeProvider` from `api/providers/base.py`. See [Provider Architecture](architecture/provider-architecture.md).
 
-**Different region** — update the `aws_region` variable in `infra/terraform.tfvars` and the AWS region in your SSM parameters.
-
-**Different DNS provider** — replace the Cloudflare API calls in `start.py` and `stop.py` with your provider's equivalent HTTP API. Update the health check in `status.py` accordingly.
+**Different DNS provider** — implement `DNSProvider` from `api/dns/base.py`. See [Provider Architecture](architecture/provider-architecture.md).
 
 ---
 
 ## Security Notes
 
 - The widget's Start/Stop API is protected with Basic Auth via a Lambda Authorizer
-- No credentials are stored in this repo — all secrets go in Terraform Cloud environment variables or AWS SSM
+- No credentials are stored in this repo — all secrets go in AWS SSM Parameter Store or Terraform Cloud environment variables
 - EC2 instances are **terminated**, not stopped — no data persists between sessions
 
 ---
