@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
+from api.authorizer import handler as authorizer_handler
 from api.start import handler as start_handler
 from api.status import handler as status_handler
 from api.stop import handler as stop_handler
@@ -56,6 +57,14 @@ class LambdaHandlerTests(unittest.TestCase):
         self.assertEqual(response["statusCode"], 200)
         mock_dns.delete_record.assert_called_once_with("inference.example.com")
         mock_compute.terminate_instance.assert_called_once_with("")
+
+    @patch("api.authorizer._get_parameter")
+    def test_authorizer_returns_simple_response_for_valid_credentials(self, mock_get_parameter: MagicMock) -> None:
+        mock_get_parameter.side_effect = ["demo_user", "demo_pass"]
+
+        response = authorizer_handler({"headers": {"Authorization": "Basic ZGVtb191c2VyOmRlbW9fcGFzcw=="}}, None)
+
+        self.assertEqual(response, {"isAuthorized": True})
 
 
 if __name__ == "__main__":

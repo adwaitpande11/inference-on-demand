@@ -4,6 +4,6 @@ output "api_gateway_url" {
 }
 
 output "security_group_id" {
-  description = "The ID of the security group used for the inference environment"
-  value       = aws_security_group.lambda_sg.id
+  description = "The ID of the security group used for the Ollama EC2 instance"
+  value       = aws_security_group.ollama_ec2_sg.id
 }

@@ -13,9 +13,10 @@ terraform {
   }
 
   backend "remote" {
-    organization = var.tf_cloud_org
+    organization = "adwaitpande11"
+
     workspaces {
-      name = var.tf_cloud_workspace
+      name = "inference-on-demand"
     }
   }
 }
