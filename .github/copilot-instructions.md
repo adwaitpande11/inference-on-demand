@@ -18,7 +18,7 @@ Browser (embeddable widget)
     └── Inference → direct HTTP to inference.yourdomain.com:11434 (non-streaming)
 ```
 
-- **Persistent infra:** Terraform (`deploy/aws/`), applied once locally via Terraform CLI
+- **Persistent infra:** Terraform (`deploy/aws/`), applied once via Terraform CLI in **Local execution mode**. Terraform Cloud stores remote state only — the actual `plan`/`apply` runs on the developer's machine, because the Lambda packaging step (`null_resource.build_lambda_packages`) needs access to the full repo checkout (`api/`), which lives outside `deploy/aws/` and is not available on Terraform Cloud's remote workers. AWS credentials must be exported locally (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`) before running `terraform apply`.
 - **EC2 lifecycle:** `api/providers/aws_ec2.py` via boto3 — `run_instances`, `describe_instances`, `terminate_instances`
 - **DNS lifecycle:** `api/dns/cloudflare.py` via Cloudflare HTTP API — POST/DELETE/GET on `/dns_records`
 - **Instance lookup:** Tag-based (`ManagedBy=inference-on-demand`) — no runtime state in SSM
@@ -249,3 +249,5 @@ Update the relevant diagram in the same commit as any code change.
 - Do not collapse the two polling phases — EC2 running and Ollama ready are separate concerns
 - Do not add Elastic IP — dynamic IP via Cloudflare A record is intentional
 - Do not introduce framework dependencies in the widget unless absolutely necessary
+- Do not switch Terraform Cloud execution mode back to Remote — the Lambda packaging step requires local access to `api/`, which remote workers do not have
+- Do not add new Python dependencies directly into the `local-exec` provisioner command — add them to `api/requirements.txt` instead
