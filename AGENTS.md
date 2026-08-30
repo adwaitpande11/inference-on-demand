@@ -1,4 +1,4 @@
-# Copilot Instructions — inference-on-demand
+# Agent Instructions — inference-on-demand
 
 ## Project Overview
 
@@ -60,8 +60,7 @@ Browser (embeddable widget)
 
 ```
 inference-on-demand/
-├── .github/
-│   └── copilot-instructions.md
+├── AGENTS.md
 ├── architecture/
 │   ├── c1-system-context.md        # System context (AWS)
 │   ├── c2-container.md             # Container view (AWS)
@@ -251,3 +250,4 @@ Update the relevant diagram in the same commit as any code change.
 - Do not introduce framework dependencies in the widget unless absolutely necessary
 - Do not switch Terraform Cloud execution mode back to Remote — the Lambda packaging step requires local access to `api/`, which remote workers do not have
 - Do not add new Python dependencies directly into the `local-exec` provisioner command — add them to `api/requirements.txt` instead
+
