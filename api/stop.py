@@ -8,10 +8,10 @@ try:
 except ImportError:  # pragma: no cover - exercised in environments without boto3
     boto3 = None  # type: ignore[assignment]
 
-from api.dns.base import DNSProvider
-from api.dns.cloudflare import CloudflareDNSProvider
-from api.providers.aws_ec2 import AWSEC2Provider
-from api.providers.base import ComputeProvider
+from dns.base import DNSProvider
+from dns.cloudflare import CloudflareDNSProvider
+from providers.aws_ec2 import AWSEC2Provider
+from providers.base import ComputeProvider
 
 
 if boto3 is None:
@@ -26,7 +26,8 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     dns_provider = _build_dns_provider(config)
 
     try:
-        dns_provider.delete_record(config["cf_subdomain"])
+        fqdn = f"{config['cf_subdomain']}.{config['cf_domain']}"
+        dns_provider.delete_record(fqdn)
     except RuntimeError:
         pass
 
@@ -45,6 +46,7 @@ def _load_config() -> dict[str, str]:
         "cf_token": _get_parameter("/inference-on-demand/cf-token"),
         "cf_zone_id": _get_parameter("/inference-on-demand/cf-zone-id"),
         "cf_subdomain": _get_parameter("/inference-on-demand/cf-subdomain"),
+        "cf_domain": _get_parameter("/inference-on-demand/cf-domain"),
     }
 
 

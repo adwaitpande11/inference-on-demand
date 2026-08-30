@@ -8,10 +8,10 @@ try:
 except ImportError:  # pragma: no cover - exercised in environments without boto3
     boto3 = None  # type: ignore[assignment]
 
-from api.dns.base import DNSProvider
-from api.dns.cloudflare import CloudflareDNSProvider
-from api.providers.aws_ec2 import AWSEC2Provider
-from api.providers.base import ComputeProvider
+from dns.base import DNSProvider
+from dns.cloudflare import CloudflareDNSProvider
+from providers.aws_ec2 import AWSEC2Provider
+from providers.base import ComputeProvider
 
 
 if boto3 is None:

@@ -8,8 +8,8 @@ try:
 except ImportError:  # pragma: no cover - exercised in environments without boto3
     boto3 = None  # type: ignore[assignment]
 
-from api.providers.aws_ec2 import AWSEC2Provider
-from api.providers.base import ComputeProvider
+from providers.aws_ec2 import AWSEC2Provider
+from providers.base import ComputeProvider
 
 
 if boto3 is None:

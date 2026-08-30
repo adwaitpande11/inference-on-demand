@@ -29,7 +29,8 @@ resource "aws_iam_role_policy" "lambda_exec_policy" {
         Action = [
           "ec2:RunInstances",
           "ec2:TerminateInstances",
-          "ec2:DescribeInstances"
+          "ec2:DescribeInstances",
+          "ec2:CreateTags"
         ]
         Resource = "*"
       },
@@ -93,44 +94,13 @@ resource "aws_cloudwatch_log_group" "authorizer" {
   retention_in_days = 7
 }
 
-resource "null_resource" "build_lambda_packages" {
-  triggers = {
-    source_hash = "repo-packaging"
-  }
-
-  provisioner "local-exec" {
-    command = <<-EOT
-      set -e
-      REPO_ROOT="$PWD"
-      while [ "$REPO_ROOT" != "/" ]; do
-        if [ -f "$REPO_ROOT/api/start.py" ]; then
-          break
-        fi
-        REPO_ROOT="$(dirname "$REPO_ROOT")"
-      done
-
-      if [ ! -f "$REPO_ROOT/api/start.py" ]; then
-        echo "Unable to locate repository root containing api/start.py" >&2
-        exit 1
-      fi
-
-      cd "$REPO_ROOT"
-      rm -rf .build
-      mkdir -p .build
-      mkdir -p .build/lambda-packages
-      python3 -m pip install --target .build/lambda-packages -r "$REPO_ROOT/api/requirements.txt" >/dev/null 2>&1
-      cp -r api/. .build/lambda-packages/
-    EOT
-  }
-}
-
 resource "aws_lambda_function" "start" {
   function_name    = "inference-on-demand-start"
   role             = aws_iam_role.lambda_exec.arn
   handler          = "start.handler"
   runtime          = "python3.12"
-  filename         = archive_file.start.output_path
-  source_code_hash = archive_file.start.output_base64sha256
+  filename         = archive_file.lambda_package.output_path
+  source_code_hash = archive_file.lambda_package.output_base64sha256
   timeout          = 60
   memory_size      = 512
 
@@ -142,8 +112,8 @@ resource "aws_lambda_function" "stop" {
   role             = aws_iam_role.lambda_exec.arn
   handler          = "stop.handler"
   runtime          = "python3.12"
-  filename         = archive_file.stop.output_path
-  source_code_hash = archive_file.stop.output_base64sha256
+  filename         = archive_file.lambda_package.output_path
+  source_code_hash = archive_file.lambda_package.output_base64sha256
   timeout          = 60
   memory_size      = 512
 
@@ -155,8 +125,8 @@ resource "aws_lambda_function" "status" {
   role             = aws_iam_role.lambda_exec.arn
   handler          = "status.handler"
   runtime          = "python3.12"
-  filename         = archive_file.status.output_path
-  source_code_hash = archive_file.status.output_base64sha256
+  filename         = archive_file.lambda_package.output_path
+  source_code_hash = archive_file.lambda_package.output_base64sha256
   timeout          = 60
   memory_size      = 512
 
@@ -168,8 +138,8 @@ resource "aws_lambda_function" "authorizer" {
   role             = aws_iam_role.lambda_exec.arn
   handler          = "authorizer.handler"
   runtime          = "python3.12"
-  filename         = archive_file.authorizer.output_path
-  source_code_hash = archive_file.authorizer.output_base64sha256
+  filename         = archive_file.lambda_package.output_path
+  source_code_hash = archive_file.lambda_package.output_base64sha256
   timeout          = 60
   memory_size      = 512
 
@@ -274,34 +244,8 @@ resource "aws_apigatewayv2_stage" "default" {
   auto_deploy = true
 }
 
-resource "archive_file" "start" {
-  depends_on = [null_resource.build_lambda_packages]
-
+resource "archive_file" "lambda_package" {
   type        = "zip"
   source_dir  = "${path.module}/../../.build/lambda-packages"
-  output_path = "${path.module}/../../.build/start.zip"
-}
-
-resource "archive_file" "stop" {
-  depends_on = [null_resource.build_lambda_packages]
-
-  type        = "zip"
-  source_dir  = "${path.module}/../../.build/lambda-packages"
-  output_path = "${path.module}/../../.build/stop.zip"
-}
-
-resource "archive_file" "status" {
-  depends_on = [null_resource.build_lambda_packages]
-
-  type        = "zip"
-  source_dir  = "${path.module}/../../.build/lambda-packages"
-  output_path = "${path.module}/../../.build/status.zip"
-}
-
-resource "archive_file" "authorizer" {
-  depends_on = [null_resource.build_lambda_packages]
-
-  type        = "zip"
-  source_dir  = "${path.module}/../../.build/lambda-packages"
-  output_path = "${path.module}/../../.build/authorizer.zip"
+  output_path = "${path.module}/../../.build/lambda.zip"
 }

@@ -135,11 +135,16 @@ export AWS_SECRET_ACCESS_KEY="your-secret-key-from-stage-1"
 ### 3.4 — Deploy
 
 ```bash
+# Build the Lambda package first — this must run before terraform apply
+./scripts/build-lambda.sh
+
 terraform login
 cd deploy/aws
 terraform init
 terraform apply
 ```
+
+> `build-lambda.sh` installs pip dependencies and copies `api/` into `.build/lambda-packages/`. Terraform reads that directory at plan time to compute the zip hash — running the build first ensures the hash is always current and Lambda updates are correctly detected.
 
 Type `yes` when prompted. Terraform will print outputs when finished — you don't need to note these down. Later stages fetch what they need directly from the AWS Console.
 
@@ -331,12 +336,12 @@ Go to **AWS Console → Systems Manager → Parameter Store → Create parameter
 | Name | Type | Where to get the value |
 |---|---|---|
 | `/inference-on-demand/ami-id` | String | EC2 → AMIs → copy the AMI ID for the image built in Stage 4 |
-| `/inference-on-demand/instance-type` | String | The instance type you used in Stage 4.1 |
+| `/inference-on-demand/instance-type` | String | The instance type you used in Stage 4.1, e.g. `m5.xlarge` or `c5.xlarge` |
 | `/inference-on-demand/subnet-id` | String | VPC → Subnets → pick a public subnet in your region → copy its Subnet ID |
 | `/inference-on-demand/security-group-id` | String | EC2 → Security Groups → find `inference-on-demand-ollama-sg` → copy its Security Group ID |
 | `/inference-on-demand/dns-provider` | String | `cloudflare` |
 | `/inference-on-demand/cf-token` | SecureString | Cloudflare dashboard → Profile → API Tokens → Create Token → "Edit zone DNS" template → select your domain → Create Token. Cloudflare shows the token only once — copy it immediately. |
-| `/inference-on-demand/cf-zone-id` | SecureString | Cloudflare dashboard → click your domain → copy the **Zone ID** shown under API on the right |
+| `/inference-on-demand/cf-zone-id` | SecureString | Cloudflare dashboard → click your domain → copy the **Zone ID** shown under API on the right, e.g. `a1b2c3d4e5f6...` (32 hex characters) |
 | `/inference-on-demand/cf-subdomain` | String | A subdomain of your choice, e.g. `inference` |
 | `/inference-on-demand/cf-domain` | String | Your domain, e.g. `yourdomain.com` |
 
@@ -377,6 +382,8 @@ curl http://inference.yourdomain.com:11434/api/generate -d '{
 ```bash
 curl -u <basic-auth-user>:<basic-auth-password> -X POST https://<invoke-url>/stop
 ```
+
+No request body needed — `/stop` finds the running instance by its `ManagedBy=inference-on-demand` tag, so there is no instance ID to pass in.
 
 Confirm teardown:
 
@@ -454,8 +461,8 @@ window.addEventListener('ollamaOffline', () => {
 **Ollama returns "insufficient memory" / `ggml_aligned_malloc` errors**
 - The instance type doesn't have enough RAM to load the model. See the sizing guidance in Stage 4.1 — avoid micro/small instance types.
 
-**Lambda fails with `Runtime.ImportModuleError: No module named 'api'`**
-- The build packaging flattens `api/`'s contents into the deployment zip root, so imports must not use an `api.` prefix (e.g. `from providers.aws_ec2 import ...`, not `from api.providers.aws_ec2 import ...`). Check every file under `api/`, including `__init__.py` files, for leftover `api.`-prefixed imports.
+**Lambda fails with `Runtime.ImportModuleError: No module named 'X'`**
+- The Lambda package was not built before `terraform apply` — run `./scripts/build-lambda.sh` from the repo root first, then re-run `terraform apply`. The build script installs dependencies and copies `api/` so Terraform picks up the correct zip at plan time.
 
 **`/status` always returns `"terminated"` even though an instance is running**
 - Check three things: (1) an instance is actually `running` in the EC2 console, (2) the instance is tagged exactly `ManagedBy=inference-on-demand`, (3) the region the AWS EC2 provider queries matches the region the instance was actually launched in.

@@ -4,7 +4,7 @@ from typing import Any
 
 import requests
 
-from api.dns.base import DNSProvider
+from dns.base import DNSProvider
 
 
 class CloudflareDNSProvider(DNSProvider):
@@ -91,4 +91,5 @@ class CloudflareDNSProvider(DNSProvider):
 
     @staticmethod
     def _is_record_id(ref: str) -> bool:
-        return ref.startswith("record_") or ref.isalnum() and len(ref) >= 8
+        # Cloudflare record IDs are always 32 lowercase hex characters.
+        return len(ref) == 32 and all(c in "0123456789abcdef" for c in ref)

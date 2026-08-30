@@ -14,7 +14,7 @@ except ImportError:  # pragma: no cover - exercised in environments without boto
     boto3 = _Boto3Stub()
     BotoCoreError = ClientError = Exception  # type: ignore[assignment]
 
-from api.providers.base import ComputeProvider
+from providers.base import ComputeProvider
 
 
 class AWSEC2Provider(ComputeProvider):
@@ -37,6 +37,8 @@ class AWSEC2Provider(ComputeProvider):
                 InstanceType=config["instance_type"],
                 SubnetId=config["subnet_id"],
                 SecurityGroupIds=[config["security_group_id"]],
+                MinCount=1,
+                MaxCount=1,
                 TagSpecifications=[
                     {
                         "ResourceType": "instance",
