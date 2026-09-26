@@ -12,3 +12,9 @@ variable "tf_cloud_workspace" {
   description = "Terraform Cloud workspace name"
   type        = string
 }
+
+variable "allowed_ui_origins" {
+  description = "Allowed origins for API Gateway CORS preflight (e.g. S3 website or localhost)"
+  type        = list(string)
+  default     = ["*"]
+}

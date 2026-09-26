@@ -1,0 +1,165 @@
+/* Inference on Demand — Control Plane Styles */
+
+:root {
+  --primary-gradient: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  --accent-color: #3b82f6;
+  --accent-hover: #2563eb;
+  --status-ready: #10b981;
+  --status-starting: #f59e0b;
+  --status-stopping: #ef4444;
+  --status-terminated: #64748b;
+}
+
+body {
+  background-color: #f8fafc;
+  color: #1e293b;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  min-height: 100vh;
+}
+
+.navbar-brand-custom {
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.card-custom {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  background: #ffffff;
+  transition: all 0.2s ease-in-out;
+}
+
+.card-custom:hover {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.07), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+}
+
+.card-header-custom {
+  background-color: #ffffff;
+  border-bottom: 1px solid #f1f5f9;
+  font-weight: 600;
+  padding: 1rem 1.25rem;
+}
+
+/* Status Badges & Indicators */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.status-indicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.status-pill.status-ready {
+  background-color: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+.status-pill.status-ready .status-indicator {
+  background-color: var(--status-ready);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.3);
+  animation: pulse-green 2s infinite;
+}
+
+.status-pill.status-starting {
+  background-color: #fffbeb;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+.status-pill.status-starting .status-indicator {
+  background-color: var(--status-starting);
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.3);
+  animation: pulse-orange 1.5s infinite;
+}
+
+.status-pill.status-stopping {
+  background-color: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+.status-pill.status-stopping .status-indicator {
+  background-color: var(--status-stopping);
+  animation: pulse-red 1.5s infinite;
+}
+
+.status-pill.status-terminated {
+  background-color: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+.status-pill.status-terminated .status-indicator {
+  background-color: var(--status-terminated);
+}
+
+.status-pill.status-unknown {
+  background-color: #f8fafc;
+  color: #94a3b8;
+  border: 1px dashed #cbd5e1;
+}
+.status-pill.status-unknown .status-indicator {
+  background-color: #94a3b8;
+}
+
+@keyframes pulse-green {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+}
+
+@keyframes pulse-orange {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+}
+
+@keyframes pulse-red {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+
+.code-output {
+  background-color: #0f172a;
+  color: #e2e8f0;
+  border-radius: 8px;
+  padding: 1rem;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 380px;
+  overflow-y: auto;
+}
+
+.log-box {
+  background-color: #1e293b;
+  color: #94a3b8;
+  font-family: monospace;
+  font-size: 0.8rem;
+  padding: 0.75rem;
+  border-radius: 6px;
+  height: 120px;
+  overflow-y: auto;
+}
+
+.log-line {
+  margin-bottom: 2px;
+}
+.log-line.info { color: #38bdf8; }
+.log-line.success { color: #4ade80; }
+.log-line.warn { color: #facc15; }
+.log-line.error { color: #f87171; }

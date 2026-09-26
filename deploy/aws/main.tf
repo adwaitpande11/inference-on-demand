@@ -181,6 +181,14 @@ resource "aws_lambda_permission" "authorizer_apigw" {
 resource "aws_apigatewayv2_api" "http_api" {
   name          = "inference-on-demand-http-api"
   protocol_type = "HTTP"
+
+  cors_configuration {
+    # Allow cross-origin requests from the control plane UI (e.g. S3 website or localhost)
+    allow_origins = var.allowed_ui_origins
+    allow_methods = ["GET", "POST", "OPTIONS"]
+    allow_headers = ["Authorization", "Content-Type"]
+    max_age       = 3600
+  }
 }
 
 resource "aws_apigatewayv2_authorizer" "lambda_auth" {

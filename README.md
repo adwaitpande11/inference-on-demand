@@ -86,7 +86,12 @@ inference-on-demand/
 │       ├── main.tf
 │       ├── variables.tf
 │       ├── outputs.tf
-│       └── providers.tf
+│       ├── providers.tf
+│       └── ui/                         # Terraform — Decoupled S3 UI static hosting
+│           ├── main.tf
+│           ├── variables.tf
+│           ├── outputs.tf
+│           └── README.md
 ├── api/
 │   ├── start.py                        # Launch EC2 + create DNS record
 │   ├── stop.py                         # Delete DNS record + terminate EC2
@@ -99,12 +104,23 @@ inference-on-demand/
 │       ├── base.py                     # Abstract DNSProvider
 │       └── cloudflare.py               # Cloudflare HTTP API implementation
 ├── widget/
+│   ├── index.html                      # Control plane dashboard
+│   ├── app.js                          # Control plane state machine & logic
+│   ├── styles.css                      # Control plane styles
 │   ├── inference-widget.js             # Embeddable JS widget
 │   └── demo.html                       # Standalone test page
 ├── scripts/
 │   └── build-ami.sh                    # One-time AMI build script
 └── README.md
 ```
+
+---
+
+## Control Plane UI
+
+A lightweight, single-user control plane web interface is available under `widget/`:
+- **Local Run:** Open `widget/index.html` directly in any modern browser. Enter your API Gateway URL and Basic Auth credentials.
+- **AWS S3 Static Hosting:** Deploy to a decoupled S3 website bucket with zero idle compute cost. See [deploy/aws/ui/README.md](deploy/aws/ui/README.md) for deployment instructions.
 
 ---
 
