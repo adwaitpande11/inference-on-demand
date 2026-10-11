@@ -22,18 +22,27 @@ This deployment is completely decoupled from the core backend compute orchestrat
 
 ### 1. Configure Variables
 
-Create a `terraform.tfvars` file inside this directory:
-
-```hcl
-aws_region  = "ap-south-1"
-bucket_name = "my-inference-control-plane-unique-bucket-name"
-```
-
-### 2. Initialize and Apply Terraform
+Create a `terraform.tfvars` file from `terraform.tfvars.example`:
 
 ```bash
 cd deploy/aws/ui
-terraform init
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars with your region and unique S3 bucket name
+```
+
+### 2. Configure Remote Backend
+
+Copy `backend.hcl.example` to `backend.hcl` and set your Terraform Cloud organization:
+
+```bash
+cp backend.hcl.example backend.hcl
+# Edit backend.hcl with your organization name
+```
+
+### 3. Initialize and Apply Terraform
+
+```bash
+terraform init -backend-config="backend.hcl"
 terraform apply
 ```
 

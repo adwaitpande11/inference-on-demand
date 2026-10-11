@@ -1,0 +1,2 @@
+aws_region  = "ap-south-1"
+bucket_name = "my-inference-control-plane-unique-bucket-name"
