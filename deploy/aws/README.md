@@ -22,9 +22,12 @@ Following infrastructure-as-code best practices, the build and packaging step is
    This stages `api/` into `.build/lambda-packages/`.
 
 2. **Initialize Terraform:**
+   Copy `backend.hcl.example` to `backend.hcl` and set your Terraform Cloud organization:
    ```bash
    cd deploy/aws
-   terraform init
+   cp backend.hcl.example backend.hcl
+   # Edit backend.hcl with your organization name
+   terraform init -backend-config="backend.hcl"
    ```
 
 3. **Plan & Apply:**

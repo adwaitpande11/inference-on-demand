@@ -1,0 +1,5 @@
+organization = "your-terraform-cloud-org"
+
+workspaces {
+  name = "inference-on-demand"
+}

@@ -45,6 +45,13 @@ resource "aws_iam_role_policy" "lambda_exec_policy" {
       {
         Effect = "Allow"
         Action = [
+          "kms:Decrypt"
+        ]
+        Resource = "arn:aws:kms:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
           "logs:CreateLogGroup",
           "logs:CreateLogStream",
           "logs:PutLogEvents"

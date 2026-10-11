@@ -13,11 +13,8 @@ terraform {
   }
 
   backend "remote" {
-    organization = "adwaitpande11"
-
-    workspaces {
-      name = "inference-on-demand"
-    }
+    # Specify organization and workspace via:
+    # terraform init -backend-config="backend.hcl"
   }
 }
 

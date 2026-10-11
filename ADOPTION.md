@@ -96,15 +96,29 @@ cd inference-on-demand
 
 ### 3.2 — Configure Terraform inputs
 
+Create `deploy/aws/backend.hcl` from the example:
+
+```bash
+cp deploy/aws/backend.hcl.example deploy/aws/backend.hcl
+```
+
+Edit `deploy/aws/backend.hcl`:
+```hcl
+organization = "your-org-name"
+
+workspaces {
+  name = "inference-on-demand"
+}
+```
+
 Create `deploy/aws/terraform.tfvars`:
 
 ```hcl
-aws_region          = "ap-south-1"  # Or your preferred AWS region
-tf_cloud_org        = "your-org-name"
-tf_cloud_workspace  = "inference-on-demand"
+aws_region         = "ap-south-1"  # Or your preferred AWS region
+allowed_ui_origins = ["*"]
 ```
 
-> `terraform.tfvars` is in `.gitignore` — it will never be committed.
+> Both `backend.hcl` and `terraform.tfvars` are in `.gitignore` — they will never be committed.
 
 ### 3.3 — Export AWS credentials locally
 
@@ -123,7 +137,7 @@ export AWS_SECRET_ACCESS_KEY="your-secret-key-from-stage-1"
 
 terraform login
 cd deploy/aws
-terraform init
+terraform init -backend-config="backend.hcl"
 terraform apply
 ```
 
