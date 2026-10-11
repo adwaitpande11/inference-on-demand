@@ -1,19 +1,37 @@
 # AWS deployment notes
 
-The Lambda deployment packages for this project are built from the contents of the `api/` directory.
+The Lambda deployment package for this project is built from the contents of the `api/` directory along with its third-party dependencies (`api/requirements.txt`).
 
-Because `api/dns/cloudflare.py` depends on the `requests` library, the deployment package must include that dependency. Terraform uses a local packaging step to install `requests` into a temporary build directory before creating the Lambda zip archives.
+Following infrastructure-as-code best practices, the build and packaging step is executed **outside** Terraform prior to running `terraform plan` or `terraform apply`. This guarantees that Terraform's `archive_file` evaluates the exact directory hash at plan time and ensures idempotent, reproducible deployments.
 
-## Build flow
+## Prerequisites
 
-1. Run `terraform init`.
-2. Run `terraform apply`.
-3. Terraform will create the Lambda zip archives under `.build/` and include the provider and DNS modules in the package.
+- Python 3.12+ with `pip`
+- Terraform CLI (>= 1.5.0)
+- AWS credentials exported (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`)
 
-If you want to build the archives manually, use:
+## Build & Deployment Flow
 
-```bash
-mkdir -p .build/lambda-packages
-python3 -m pip install --target .build/lambda-packages/requests requests
-cp -r api/.build/lambda-packages
-```
+1. **Build the Lambda package:**
+   From the repository root, run the build script:
+   ```bash
+   ./scripts/build-lambda.sh
+   ```
+   *(On Windows PowerShell, run: `.\scripts\build-lambda.ps1`)*
+
+   This installs `requests` and copies `api/` into `.build/lambda-packages/`.
+
+2. **Initialize Terraform:**
+   ```bash
+   cd deploy/aws
+   terraform init
+   ```
+
+3. **Plan & Apply:**
+   ```bash
+   terraform plan -var-file="terraform.tfvars"
+   terraform apply -var-file="terraform.tfvars"
+   ```
+
+   Terraform will compute the package checksum via `archive_file` and deploy the Lambdas, API Gateway, and IAM roles.
+
