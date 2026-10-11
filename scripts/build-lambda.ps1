@@ -12,8 +12,11 @@ if (Test-Path "$RepoRoot\.build") {
 }
 New-Item -ItemType Directory -Force -Path $PackageDir | Out-Null
 
-Write-Host "==> Installing dependencies..."
-python -m pip install --quiet --target $PackageDir -r "$RepoRoot\api\requirements.txt"
+$hasDeps = (Get-Content "$RepoRoot\api\requirements.txt" | Where-Object { $_ -notmatch '^\s*#' -and $_ -notmatch '^\s*$' })
+if ($hasDeps) {
+    Write-Host "==> Installing dependencies..."
+    python -m pip install --quiet --target $PackageDir -r "$RepoRoot\api\requirements.txt"
+}
 
 Write-Host "==> Copying source files..."
 Copy-Item -Path "$RepoRoot\api\*" -Destination $PackageDir -Recurse -Force

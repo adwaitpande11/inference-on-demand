@@ -1,6 +1,6 @@
 # Provider Architecture
 
-This diagram shows the abstraction layers that make `inference-on-demand` portable across cloud providers, compute types, and DNS services.
+This diagram shows the abstraction layers that make `inference-on-demand` portable across cloud providers and compute types.
 
 ```mermaid
 graph TD
@@ -19,14 +19,6 @@ graph TD
         AzureVM["azure_vm.py\nAzure Virtual Machine\n(future)"]
     end
 
-    subgraph dns["DNS Abstraction (api/dns/)"]
-        DNSBase["base.py\nAbstract DNSProvider\n\ncreate_record(name, ip) → ref\ndelete_record(ref)"]
-
-        Cloudflare["cloudflare.py\nCloudflare DNS\nHTTP API"]
-        Route53["route53.py\nAWS Route 53\nboto3\n(future)"]
-        AzureDNS["azure_dns.py\nAzure DNS\n(future)"]
-    end
-
     subgraph deploy["Deployment Layer (deploy/)"]
         DeployAWS["aws/\nTerraform\nAWS Lambda, API Gateway\nIAM, Security Group"]
         DeployAzure["azure/\nTerraform or Bicep\n(future)"]
@@ -34,19 +26,13 @@ graph TD
     end
 
     Start -->|"uses"| ComputeBase
-    Start -->|"uses"| DNSBase
     Stop -->|"uses"| ComputeBase
-    Stop -->|"uses"| DNSBase
     Status -->|"uses"| ComputeBase
 
     ComputeBase -->|"implemented by"| AWSEC2
     ComputeBase -->|"implemented by"| AWSECS
     ComputeBase -->|"implemented by"| GCPCompute
     ComputeBase -->|"implemented by"| AzureVM
-
-    DNSBase -->|"implemented by"| Cloudflare
-    DNSBase -->|"implemented by"| Route53
-    DNSBase -->|"implemented by"| AzureDNS
 
     DeployAWS -->|"provisions runtime for"| AWSEC2
     DeployAzure -->|"provisions runtime for"| AzureVM
@@ -58,20 +44,12 @@ graph TD
 1. Create `api/providers/<your_provider>.py`
 2. Extend `ComputeProvider` from `api/providers/base.py`
 3. Implement all four methods: `launch_instance`, `terminate_instance`, `get_state`, `get_ip`
-4. Add your provider to the factory in `api/providers/__init__.py`
-5. Create `deploy/<your_cloud>/` with the corresponding IaC config
-6. Add `architecture/<your_cloud>/` with your provider-specific diagrams
-
-## How to Add a New DNS Provider
-
-1. Create `api/dns/<your_provider>.py`
-2. Extend `DNSProvider` from `api/dns/base.py`
-3. Implement both methods: `create_record`, `delete_record`
-4. Add your provider to the factory in `api/dns/__init__.py`
+4. Register your provider in `_build_compute_provider` in the orchestration handlers
+5. Create `deploy/<your_cloud>/` with the corresponding IaC configuration
+6. Add `architecture/<your_cloud>/` with provider-specific diagrams
 
 ## Design Principles
 
 - Orchestration layer (`start.py`, `stop.py`, `status.py`) never contains provider-specific code
-- Provider selection is config-driven — change the provider in your config store, no code changes needed
-- Compute and DNS providers are independently swappable — any combination works
+- Provider selection is config-driven — change the compute provider in your config store, no code changes needed
 - Each provider is a single self-contained file with no cross-provider dependencies

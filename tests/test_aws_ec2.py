@@ -34,8 +34,9 @@ class AWSEC2ProviderTests(unittest.TestCase):
         kwargs = mock_ec2.run_instances.call_args.kwargs
         self.assertEqual(kwargs["ImageId"], "ami-123")
         self.assertEqual(kwargs["InstanceType"], "t3.micro")
-        self.assertEqual(kwargs["SubnetId"], "subnet-123")
-        self.assertEqual(kwargs["SecurityGroupIds"], ["sg-123"])
+        self.assertEqual(kwargs["NetworkInterfaces"][0]["SubnetId"], "subnet-123")
+        self.assertEqual(kwargs["NetworkInterfaces"][0]["Groups"], ["sg-123"])
+        self.assertTrue(kwargs["NetworkInterfaces"][0]["AssociatePublicIpAddress"])
 
     @patch("api.providers.aws_ec2.boto3.client")
     def test_terminate_instance_uses_tag_lookup(self, mock_client: MagicMock) -> None:
@@ -83,6 +84,49 @@ class AWSEC2ProviderTests(unittest.TestCase):
         state = self.provider.get_state("ignored-handle")
 
         self.assertEqual(state, "running")
+
+    @patch("api.providers.aws_ec2.boto3.client")
+    def test_get_ip_returns_only_public_ip(self, mock_client: MagicMock) -> None:
+        mock_ec2 = MagicMock()
+        mock_client.return_value = mock_ec2
+        mock_ec2.describe_instances.return_value = {
+            "Reservations": [
+                {
+                    "Instances": [
+                        {
+                            "InstanceId": "i-222",
+                            "PublicIpAddress": "54.23.45.67",
+                            "PrivateIpAddress": "10.0.1.50",
+                            "Tags": [{"Key": "ManagedBy", "Value": "inference-on-demand"}],
+                        }
+                    ]
+                }
+            ]
+        }
+
+        ip = self.provider.get_ip("ignored-handle")
+        self.assertEqual(ip, "54.23.45.67")
+
+    @patch("api.providers.aws_ec2.boto3.client")
+    def test_get_ip_returns_empty_when_no_public_ip(self, mock_client: MagicMock) -> None:
+        mock_ec2 = MagicMock()
+        mock_client.return_value = mock_ec2
+        mock_ec2.describe_instances.return_value = {
+            "Reservations": [
+                {
+                    "Instances": [
+                        {
+                            "InstanceId": "i-222",
+                            "PrivateIpAddress": "10.0.1.50",
+                            "Tags": [{"Key": "ManagedBy", "Value": "inference-on-demand"}],
+                        }
+                    ]
+                }
+            ]
+        }
+
+        ip = self.provider.get_ip("ignored-handle")
+        self.assertEqual(ip, "")
 
 
 if __name__ == "__main__":

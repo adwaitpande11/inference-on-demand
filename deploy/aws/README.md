@@ -1,12 +1,12 @@
 # AWS deployment notes
 
-The Lambda deployment package for this project is built from the contents of the `api/` directory along with its third-party dependencies (`api/requirements.txt`).
+The Lambda deployment package for this project is built from the contents of the `api/` directory.
 
 Following infrastructure-as-code best practices, the build and packaging step is executed **outside** Terraform prior to running `terraform plan` or `terraform apply`. This guarantees that Terraform's `archive_file` evaluates the exact directory hash at plan time and ensures idempotent, reproducible deployments.
 
 ## Prerequisites
 
-- Python 3.12+ with `pip`
+- Python 3.12+
 - Terraform CLI (>= 1.5.0)
 - AWS credentials exported (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`)
 
@@ -19,7 +19,7 @@ Following infrastructure-as-code best practices, the build and packaging step is
    ```
    *(On Windows PowerShell, run: `.\scripts\build-lambda.ps1`)*
 
-   This installs `requests` and copies `api/` into `.build/lambda-packages/`.
+   This stages `api/` into `.build/lambda-packages/`.
 
 2. **Initialize Terraform:**
    ```bash

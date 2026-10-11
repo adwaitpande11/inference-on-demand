@@ -45,11 +45,11 @@ The control plane SHALL execute two distinct polling phases to monitor compute p
 
 #### Scenario: EC2 infrastructure provisioning poller
 - **WHEN** the UI enters the STARTING state
-- **THEN** the UI polls `GET /status` every 5 seconds until the compute state reports `running` with an active DNS/IP endpoint
+- **THEN** the UI polls `GET /status` every 5 seconds until the compute state reports `running` with an active public IP endpoint
 
 #### Scenario: Ollama service readiness poller
 - **WHEN** EC2 reports `running`
-- **THEN** the UI initiates HTTP GET polling directly to `http://<domain>:11434/` every 5 seconds until Ollama returns HTTP 200 OK, at which point the UI transitions to READY
+- **THEN** the UI initiates HTTP GET polling directly to `http://<ip>:11434/` every 5 seconds until Ollama returns HTTP 200 OK, at which point the UI transitions to READY
 
 #### Scenario: Compute termination polling
 - **WHEN** the UI enters the STOPPING state

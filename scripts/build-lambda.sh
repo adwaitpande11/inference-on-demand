@@ -17,9 +17,11 @@ echo "==> Cleaning previous build..."
 rm -rf "$REPO_ROOT/.build"
 mkdir -p "$PACKAGE_DIR"
 
-echo "==> Installing dependencies..."
-pip3 install --quiet --target "$PACKAGE_DIR" \
-  -r "$REPO_ROOT/api/requirements.txt"
+if grep -qv '^[[:space:]]*#' "$REPO_ROOT/api/requirements.txt" 2>/dev/null && grep -qv '^[[:space:]]*$' "$REPO_ROOT/api/requirements.txt" 2>/dev/null; then
+  echo "==> Installing dependencies..."
+  pip3 install --quiet --target "$PACKAGE_DIR" \
+    -r "$REPO_ROOT/api/requirements.txt"
+fi
 
 echo "==> Copying source files..."
 cp -r "$REPO_ROOT/api/." "$PACKAGE_DIR/"

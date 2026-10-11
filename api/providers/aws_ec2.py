@@ -35,10 +35,16 @@ class AWSEC2Provider(ComputeProvider):
             response = self.client.run_instances(
                 ImageId=config["ami_id"],
                 InstanceType=config["instance_type"],
-                SubnetId=config["subnet_id"],
-                SecurityGroupIds=[config["security_group_id"]],
                 MinCount=1,
                 MaxCount=1,
+                NetworkInterfaces=[
+                    {
+                        "DeviceIndex": 0,
+                        "SubnetId": config["subnet_id"],
+                        "Groups": [config["security_group_id"]],
+                        "AssociatePublicIpAddress": True,
+                    }
+                ],
                 TagSpecifications=[
                     {
                         "ResourceType": "instance",
@@ -109,7 +115,7 @@ class AWSEC2Provider(ComputeProvider):
             return ""
 
         instance = instances[0]
-        public_ip = instance.get("PublicIpAddress") or instance.get("PrivateIpAddress", "")
+        public_ip = instance.get("PublicIpAddress", "")
         return public_ip or ""
 
     def _get_instance_id_by_tag(self, handle: str) -> str | None:

@@ -247,7 +247,7 @@ class ControlPlaneApp {
         this.btnStart.disabled = true;
         this.btnStop.disabled = true;
         this.pollingBanner.classList.remove('d-none');
-        this.pollingMessage.textContent = 'Terminating EC2 instance and deleting DNS record...';
+        this.pollingMessage.textContent = 'Terminating EC2 instance...';
         this.btnRunInference.disabled = true;
         this.inferenceStatusBadge.textContent = 'Tearing Down';
         this.inferenceStatusBadge.className = 'badge bg-danger';
@@ -442,7 +442,7 @@ class ControlPlaneApp {
 
         if (rawState === 'terminated' || rawState === '') {
           this.stopPolling();
-          this.log('Instance terminated and DNS record deleted.', 'success');
+          this.log('Instance terminated.', 'success');
           this.transitionTo(STATES.TERMINATED);
         } else {
           this.log(`EC2 state: ${rawState}... waiting for termination.`, 'info');

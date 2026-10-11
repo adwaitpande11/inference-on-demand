@@ -36,7 +36,7 @@ graph TD
     end
 
     LifecycleAPI["Lifecycle API\nAPI Gateway + Lambda"]
-    OllamaEndpoint["Ollama\nollama.yourdomain.com:11434"]
+    OllamaEndpoint["Ollama\nhttp://<ec2-ip>:11434"]
 
     HostApp -->|"script tag\ndata-api-url, data-token"| Config
     Config -->|"Initialise with\napi url + auth token"| SM

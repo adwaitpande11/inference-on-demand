@@ -1,1 +1,1 @@
-requests==2.32.3
+# No external runtime dependencies required (boto3 is provided by the AWS Lambda runtime)

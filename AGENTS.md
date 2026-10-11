@@ -4,36 +4,32 @@
 
 `inference-on-demand` is an open source project for running **ephemeral, private LLM inference on AWS**. It spins up an EC2 instance when needed and destroys it when done — no always-on servers, no idle costs.
 
-AWS with Cloudflare DNS is the reference implementation. The provider abstraction (`api/providers/`, `api/dns/`) makes it portable to other clouds and DNS services without touching orchestration logic.
+AWS EC2 is the reference compute implementation. The provider abstraction (`api/providers/`) makes it portable to other clouds and compute environments without touching orchestration logic.
 
 ---
 
 ## Architecture
 
 ```
-Browser (embeddable widget)
+Browser (embeddable widget / control plane UI)
     ├── Start/Stop → API Gateway → Lambda → boto3 run_instances() / terminate_instances()
-    │                                     → Cloudflare API create / delete A record
     │
-    └── Inference → direct HTTP to inference.yourdomain.com:11434 (non-streaming)
+    └── Inference → direct HTTP to http://<ec2-public-ip>:11434 (non-streaming)
 ```
 
 - **Persistent infra:** Terraform (`deploy/aws/`), applied once via Terraform CLI in **Local execution mode**. Terraform Cloud stores remote state only — the actual `plan`/`apply` runs on the developer's machine. The Lambda packaging step (`./scripts/build-lambda.sh`) is executed outside Terraform before `terraform plan`/`apply` to ensure exact checksums at plan time. AWS credentials must be exported locally (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`) before running `terraform apply`.
 - **EC2 lifecycle:** `api/providers/aws_ec2.py` via boto3 — `run_instances`, `describe_instances`, `terminate_instances`
-- **DNS lifecycle:** `api/dns/cloudflare.py` via Cloudflare HTTP API — POST/DELETE/GET on `/dns_records`
 - **Instance lookup:** Tag-based (`ManagedBy=inference-on-demand`) — no runtime state in SSM
 - **Inference traffic:** Client apps call Ollama directly on port 11434 — Lambda is never in the inference path
 - **EC2:** Terminated (not stopped) after use — truly ephemeral, new public IP on every launch
-- **No Elastic IP** — dynamic IP resolved via Cloudflare A record (TTL 60s) on each start
 
 ---
 
-## Three Axes of Modularity
+## Modularity
 
 | Axis | Interface | Reference Implementation | Future Examples |
 |---|---|---|---|
 | Cloud compute | `api/providers/base.py` | `aws_ec2.py` (boto3) | `aws_ecs.py`, `gcp_compute.py`, `azure_vm.py` |
-| DNS | `api/dns/base.py` | `cloudflare.py` (HTTP API) | `route53.py`, `azure_dns.py` |
 | IaC deployment | `deploy/<cloud>/` | `deploy/aws/` (Terraform) | `deploy/azure/`, `deploy/gcp/` |
 
 ---
@@ -46,7 +42,6 @@ Browser (embeddable widget)
 | Persistent infra | Terraform (HCL) — `deploy/aws/` |
 | State backend | Terraform Cloud |
 | Compute lifecycle | boto3 (AWS SDK) via `api/providers/aws_ec2.py` |
-| DNS lifecycle | Cloudflare HTTP API via `api/dns/cloudflare.py` |
 | Runtime config + secrets | AWS SSM Parameter Store |
 | Frontend | Plain HTML + CSS + JavaScript + Bootstrap |
 | Auth | Basic Auth via Lambda Authorizer |
@@ -75,25 +70,30 @@ inference-on-demand/
 │       ├── main.tf
 │       ├── variables.tf
 │       ├── outputs.tf
-│       └── providers.tf
+│       ├── providers.tf
+│       └── ui/                     # Terraform — Decoupled S3 UI static hosting
+│           ├── main.tf
+│           ├── variables.tf
+│           ├── outputs.tf
+│           └── README.md
 ├── api/
-│   ├── start.py                    # Orchestration — launch + DNS record create
-│   ├── stop.py                     # Orchestration — DNS record delete + terminate
-│   ├── status.py                   # Orchestration — EC2 state query
+│   ├── start.py                    # Orchestration — compute launch
+│   ├── stop.py                     # Orchestration — compute terminate
+│   ├── status.py                   # Orchestration — compute state & IP query
 │   ├── authorizer.py               # Basic Auth Lambda Authorizer
-│   ├── providers/
-│   │   ├── __init__.py             # Provider factory
-│   │   ├── base.py                 # Abstract ComputeProvider
-│   │   └── aws_ec2.py              # boto3 EC2 implementation
-│   └── dns/
-│       ├── __init__.py             # DNS provider factory
-│       ├── base.py                 # Abstract DNSProvider
-│       └── cloudflare.py           # Cloudflare HTTP API implementation
+│   └── providers/
+│       ├── base.py                 # Abstract ComputeProvider
+│       └── aws_ec2.py              # boto3 EC2 implementation
 ├── widget/
-│   ├── inference-widget.js
-│   └── demo.html
+│   ├── index.html                  # Control plane dashboard
+│   ├── app.js                      # Control plane state machine & logic
+│   ├── styles.css                  # Control plane styles
+│   ├── inference-widget.js         # Embeddable JS widget
+│   └── demo.html                   # Standalone test page
 ├── scripts/
-│   └── build-ami.sh
+│   ├── build-lambda.sh             # Build Lambda package
+│   ├── build-lambda.ps1            # Build Lambda package (PowerShell)
+│   └── build-ami.sh                # One-time AMI build script
 ├── .gitignore
 ├── LICENSE
 └── README.md
@@ -120,29 +120,18 @@ class ComputeProvider:
         """Return the public IP of the running instance."""
 ```
 
-### DNSProvider (`api/dns/base.py`)
-
-```python
-class DNSProvider:
-    def create_record(self, name: str, ip: str) -> str:
-        """Create an A record pointing name to ip. Returns a record reference."""
-
-    def delete_record(self, ref: str) -> None:
-        """Delete the DNS record identified by ref."""
-```
-
 ---
 
 ## Key Design Decisions
 
 ### Orchestration Never Contains Provider-Specific Code
-`start.py`, `stop.py`, `status.py` call provider interfaces only. boto3 imports, Cloudflare HTTP calls — none of this appears in orchestration files. Provider-specific code lives exclusively in `api/providers/` and `api/dns/`.
+`start.py`, `stop.py`, `status.py` call provider interfaces only. boto3 imports do not appear in orchestration files. Provider-specific code lives exclusively in `api/providers/`.
 
 ### Tag-Based Instance Lookup
-EC2 instances are tagged `ManagedBy=inference-on-demand` at launch. `stop.py` and `status.py` find the active instance by querying this tag via `describe_instances`. No instance ID or DNS record ID is stored in SSM between sessions.
+EC2 instances are tagged `ManagedBy=inference-on-demand` at launch. `stop.py` and `status.py` find the active instance by querying this tag via `describe_instances`. No instance ID is stored in SSM between sessions.
 
 ### No Runtime State in SSM
-SSM holds only static config and secrets. The live systems are the state — EC2 via tag, Cloudflare via subdomain name query. Nothing is written to SSM at runtime.
+SSM holds only static config and secrets. The live system is the state — EC2 queried via tag. Nothing is written to SSM at runtime.
 
 ### SSM Parameter Store — Config and Secrets Only
 
@@ -153,26 +142,16 @@ SSM holds only static config and secrets. The live systems are the state — EC2
 | `/inference-on-demand/subnet-id` | String | Public subnet for EC2 |
 | `/inference-on-demand/security-group-id` | String | Security Group for EC2 |
 | `/inference-on-demand/compute-provider` | String | Provider name e.g. `aws_ec2` |
-| `/inference-on-demand/dns-provider` | String | DNS provider name e.g. `cloudflare` |
-| `/inference-on-demand/cf-token` | SecureString | Cloudflare API token |
-| `/inference-on-demand/cf-zone-id` | SecureString | Cloudflare Zone ID |
-| `/inference-on-demand/cf-subdomain` | String | Subdomain prefix |
-| `/inference-on-demand/cf-domain` | String | Root domain |
 | `/inference-on-demand/basic-auth-user` | SecureString | Widget auth username |
 | `/inference-on-demand/basic-auth-password` | SecureString | Widget auth password |
 
 ### Ephemeral by Design
 - EC2 instances are **terminated**, never stopped
 - Every Start provisions a fresh instance from the custom AMI
-- Every Stop terminates the instance and deletes the Cloudflare A record
-
-### No Elastic IP
-- `start.py` gets the public IP from `describe_instances` once the instance is `running`
-- Creates a Cloudflare A record pointing to that IP (TTL 60s)
-- `stop.py` queries Cloudflare by subdomain name to get the record ID, then deletes it
+- Every Stop terminates the instance
 
 ### Inference is Direct and Non-Streaming
-- Client apps call Ollama directly at `inference.yourdomain.com:11434`
+- Client apps call Ollama directly at `http://<ec2-public-ip>:11434`
 - All inference calls use `"stream": false` — complete JSON response, no SSE
 - Use `/api/generate` for single-turn; `/api/chat` when role separation is needed
 - Do not implement streaming
@@ -184,7 +163,7 @@ SSM holds only static config and secrets. The live systems are the state — EC2
 
 ### Two-Stage Polling
 Do not collapse these:
-1. **EC2 Poller** — polls `GET /status` every 5s until `describe_instances` returns `running`
+1. **EC2 Poller** — polls `GET /status` every 5s until `describe_instances` returns `running` and provides a public IP
 2. **Ollama Health Poller** — polls `:11434` directly every 5s until 200 OK
 
 EC2 `running` ≠ Ollama ready. ~30–60s gap while model loads.
@@ -196,16 +175,9 @@ EC2 `running` ≠ Ollama ready. ~30–60s gap while model loads.
 1. Create `api/providers/<name>.py`
 2. Extend `ComputeProvider` from `api/providers/base.py`
 3. Implement: `launch_instance`, `terminate_instance`, `get_state`, `get_ip`
-4. Register in `api/providers/__init__.py`
+4. Register in `_build_compute_provider` in orchestration handlers
 5. Add `deploy/<cloud>/` with IaC config
 6. Add `architecture/<cloud>/` with provider-specific diagrams
-
-## How to Add a New DNS Provider
-
-1. Create `api/dns/<name>.py`
-2. Extend `DNSProvider` from `api/dns/base.py`
-3. Implement: `create_record`, `delete_record`
-4. Register in `api/dns/__init__.py`
 
 ---
 
@@ -218,7 +190,7 @@ Read the relevant diagram before writing any new code.
 | `architecture/c1-system-context.md` | System context — AWS actors and relationships |
 | `architecture/c2-container.md` | All containers — AWS services, Lambda functions, providers |
 | `architecture/c3-widget-components.md` | Widget internals and state machine components |
-| `architecture/sequence-e2e.md` | End-to-end flow — boto3, Cloudflare API, SSM calls |
+| `architecture/sequence-e2e.md` | End-to-end flow — boto3 and SSM calls |
 | `architecture/state-diagram.md` | Widget state transitions |
 | `architecture/provider-architecture.md` | Provider abstraction layers — how to extend |
 | `architecture/aws/deployment-aws.md` | deploy/aws/ Terraform structure |
@@ -239,15 +211,13 @@ Update the relevant diagram in the same commit as any code change.
 
 ## What to Avoid
 
-- Do not put boto3 or Cloudflare API calls in `start.py`, `stop.py`, or `status.py` — use provider interfaces
-- Do not store runtime state (instance ID, DNS record ID) in SSM — use tag-based and name-based lookup
+- Do not put boto3 calls in `start.py`, `stop.py`, or `status.py` — use provider interfaces
+- Do not store runtime state (instance ID) in SSM — use tag-based lookup
 - Do not proxy inference through Lambda — timeout limitations make this unworkable
 - Do not implement streaming — non-streaming is the intentional design for app-to-app use
 - Do not stop EC2 instances — always terminate
-- Do not hardcode AWS account IDs, Cloudflare zone IDs, domain names, or credentials anywhere in source
+- Do not hardcode AWS account IDs, credentials, or IPs anywhere in source
 - Do not collapse the two polling phases — EC2 running and Ollama ready are separate concerns
-- Do not add Elastic IP — dynamic IP via Cloudflare A record is intentional
 - Do not introduce framework dependencies in the widget unless absolutely necessary
 - Do not switch Terraform Cloud execution mode back to Remote — the build and packaging step requires local access to `api/`, which remote workers do not have
 - Do not run `pip install` inside Terraform via provisioners — run `./scripts/build-lambda.sh` before running Terraform commands
-
