@@ -1,5 +1,11 @@
+import sys
+from pathlib import Path
 import unittest
 from unittest.mock import MagicMock, patch
+
+API_DIR = Path(__file__).resolve().parent.parent / "api"
+if str(API_DIR) not in sys.path:
+    sys.path.insert(0, str(API_DIR))
 
 from api.authorizer import handler as authorizer_handler
 from api.start import handler as start_handler
@@ -12,7 +18,10 @@ class LambdaHandlerTests(unittest.TestCase):
     @patch("api.start._build_compute_provider")
     @patch("api.start._load_config")
     def test_start_handler_uses_provider_interfaces(self, mock_load_config: MagicMock, mock_build_compute: MagicMock, mock_build_dns: MagicMock) -> None:
-        mock_load_config.return_value = {"cf_subdomain": "inference.example.com"}
+        mock_load_config.return_value = {
+            "cf_subdomain": "inference",
+            "cf_domain": "example.com",
+        }
         mock_compute = MagicMock()
         mock_compute.launch_instance.return_value = "i-123"
         mock_compute.get_ip.return_value = "1.2.3.4"
@@ -46,7 +55,10 @@ class LambdaHandlerTests(unittest.TestCase):
     @patch("api.stop._build_compute_provider")
     @patch("api.stop._load_config")
     def test_stop_handler_calls_delete_and_terminate(self, mock_load_config: MagicMock, mock_build_compute: MagicMock, mock_build_dns: MagicMock) -> None:
-        mock_load_config.return_value = {"cf_subdomain": "inference.example.com"}
+        mock_load_config.return_value = {
+            "cf_subdomain": "inference",
+            "cf_domain": "example.com",
+        }
         mock_compute = MagicMock()
         mock_build_compute.return_value = mock_compute
         mock_dns = MagicMock()

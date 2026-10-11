@@ -30,7 +30,8 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     if not ip:
         raise RuntimeError("EC2 instance did not return a public IP")
 
-    record_ref = dns_provider.create_record(config["cf_subdomain"], ip)
+    fqdn = f"{config['cf_subdomain']}.{config['cf_domain']}"
+    record_ref = dns_provider.create_record(fqdn, ip)
 
     return {
         "statusCode": 200,

@@ -1,5 +1,11 @@
+import sys
+from pathlib import Path
 import unittest
 from unittest.mock import MagicMock, patch
+
+API_DIR = Path(__file__).resolve().parent.parent / "api"
+if str(API_DIR) not in sys.path:
+    sys.path.insert(0, str(API_DIR))
 
 from api.dns.cloudflare import CloudflareDNSProvider
 
