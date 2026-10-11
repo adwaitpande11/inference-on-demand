@@ -209,7 +209,16 @@ Update the relevant diagram in the same commit as any code change.
 
 ---
 
+## Documentation & Writing Conventions
+
+- **Non-retroactive & self-standing:** Write documentation and architecture specifications in a neutral, self-contained, and forward-looking manner describing the current system state. Avoid retroactive commentary, historical comparisons, or changelog-style narratives explaining previous designs or why past approaches were removed.
+- **Single source of truth:** Specifications and guides must be directly actionable as standalone references without requiring historical context.
+
+---
+
 ## What to Avoid
+
+- Do not write retroactive documentation (e.g. "earlier we used X, but now we use Y") — keep documentation self-contained and focused on the current design
 
 - Do not put boto3 calls in `start.py`, `stop.py`, or `status.py` — use provider interfaces
 - Do not store runtime state (instance ID) in SSM — use tag-based lookup
