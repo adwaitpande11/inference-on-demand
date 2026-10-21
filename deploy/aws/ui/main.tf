@@ -42,3 +42,33 @@ resource "aws_s3_bucket_policy" "ui_public_read" {
     ]
   })
 }
+
+locals {
+  mime_types = {
+    "html" = "text/html"
+    "css"  = "text/css"
+    "js"   = "application/javascript"
+    "json" = "application/json"
+    "png"  = "image/png"
+    "svg"  = "image/svg+xml"
+    "ico"  = "image/x-icon"
+  }
+}
+
+resource "aws_s3_object" "ui_files" {
+  for_each = fileset("${path.module}/../../../widget", "**/*")
+
+  bucket = aws_s3_bucket.ui.id
+  key    = each.value
+  source = "${path.module}/../../../widget/${each.value}"
+  etag   = filemd5("${path.module}/../../../widget/${each.value}")
+
+  content_type = lookup(
+    local.mime_types,
+    regex("[^.]+$", each.value),
+    "application/octet-stream"
+  )
+
+  depends_on = [aws_s3_bucket_policy.ui_public_read]
+}
+

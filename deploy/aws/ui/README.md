@@ -46,15 +46,7 @@ terraform init -backend-config="backend.hcl"
 terraform apply
 ```
 
-Note the output `ui_website_url`.
-
-### 3. Deploy UI Assets
-
-Sync the static web application files from the `widget/` directory to the newly created S3 bucket:
-
-```bash
-aws s3 sync ../../../widget/ s3://<your-bucket-name>/ --delete
-```
+Terraform provisions the S3 bucket, configures static website hosting, and automatically uploads all files from `widget/` with the appropriate MIME types and checksums. Note the output `ui_website_url`.
 
 ### 4. Open Control Plane
 
