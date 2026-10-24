@@ -31,6 +31,7 @@ class AWSEC2Provider(ComputeProvider):
         return self._client
 
     def launch_instance(self, config: dict[str, Any]) -> str:
+        # Prevent duplicate spawns: return existing instance handle if already pending or running
         active_instance_id = self._get_active_instance_id()
         if active_instance_id:
             return active_instance_id
