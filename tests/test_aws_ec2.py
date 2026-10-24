@@ -39,6 +39,37 @@ class AWSEC2ProviderTests(unittest.TestCase):
         self.assertTrue(kwargs["NetworkInterfaces"][0]["AssociatePublicIpAddress"])
 
     @patch("api.providers.aws_ec2.boto3.client")
+    def test_launch_instance_returns_existing_if_already_active(self, mock_client: MagicMock) -> None:
+        mock_ec2 = MagicMock()
+        mock_client.return_value = mock_ec2
+        mock_ec2.describe_instances.return_value = {
+            "Reservations": [
+                {
+                    "Instances": [
+                        {
+                            "InstanceId": "i-existing999",
+                            "State": {"Name": "running"},
+                            "Tags": [{"Key": "ManagedBy", "Value": "inference-on-demand"}],
+                        }
+                    ]
+                }
+            ]
+        }
+
+        config = {
+            "ami_id": "ami-123",
+            "instance_type": "t3.micro",
+            "subnet_id": "subnet-123",
+            "security_group_id": "sg-123",
+        }
+
+        handle = self.provider.launch_instance(config)
+
+        self.assertEqual(handle, "i-existing999")
+        mock_ec2.run_instances.assert_not_called()
+
+
+    @patch("api.providers.aws_ec2.boto3.client")
     def test_terminate_instance_uses_tag_lookup(self, mock_client: MagicMock) -> None:
         mock_ec2 = MagicMock()
         mock_client.return_value = mock_ec2

@@ -8,7 +8,10 @@ class ComputeProvider(ABC):
 
     @abstractmethod
     def launch_instance(self, config: dict) -> str:
-        """Launch a compute instance and return a handle."""
+        """Launch a compute instance and return a handle.
+
+        If an active instance already exists, returns its handle without launching a new one.
+        """
 
     @abstractmethod
     def terminate_instance(self, handle: str) -> None:

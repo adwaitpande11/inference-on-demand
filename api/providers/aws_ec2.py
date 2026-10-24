@@ -31,6 +31,10 @@ class AWSEC2Provider(ComputeProvider):
         return self._client
 
     def launch_instance(self, config: dict[str, Any]) -> str:
+        active_instance_id = self._get_active_instance_id()
+        if active_instance_id:
+            return active_instance_id
+
         try:
             response = self.client.run_instances(
                 ImageId=config["ami_id"],
@@ -137,3 +141,24 @@ class AWSEC2Provider(ComputeProvider):
                     return instance.get("InstanceId")
 
         return None
+
+    def _get_active_instance_id(self) -> str | None:
+        try:
+            response = self.client.describe_instances(
+                Filters=[
+                    {"Name": "tag:ManagedBy", "Values": ["inference-on-demand"]},
+                    {"Name": "instance-state-name", "Values": ["pending", "running"]},
+                ]
+            )
+        except (BotoCoreError, ClientError) as exc:
+            raise RuntimeError(f"Failed to find active EC2 instance by tag: {exc}") from exc
+
+        reservations = response.get("Reservations", [])
+        for reservation in reservations:
+            for instance in reservation.get("Instances", []):
+                tags = instance.get("Tags", [])
+                if any(tag.get("Key") == "ManagedBy" and tag.get("Value") == "inference-on-demand" for tag in tags):
+                    return instance.get("InstanceId")
+
+        return None
+

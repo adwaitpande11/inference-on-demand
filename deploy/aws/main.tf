@@ -102,53 +102,57 @@ resource "aws_cloudwatch_log_group" "authorizer" {
 }
 
 resource "aws_lambda_function" "start" {
-  function_name    = "inference-on-demand-start"
-  role             = aws_iam_role.lambda_exec.arn
-  handler          = "start.handler"
-  runtime          = "python3.12"
-  filename         = archive_file.lambda_package.output_path
-  source_code_hash = archive_file.lambda_package.output_base64sha256
-  timeout          = 60
-  memory_size      = 512
+  function_name                  = "inference-on-demand-start"
+  role                           = aws_iam_role.lambda_exec.arn
+  handler                        = "start.handler"
+  runtime                        = "python3.12"
+  filename                       = archive_file.lambda_package.output_path
+  source_code_hash               = archive_file.lambda_package.output_base64sha256
+  timeout                        = 60
+  memory_size                    = 512
+  reserved_concurrent_executions = var.lambda_reserved_concurrent_executions
 
   depends_on = [aws_cloudwatch_log_group.start]
 }
 
 resource "aws_lambda_function" "stop" {
-  function_name    = "inference-on-demand-stop"
-  role             = aws_iam_role.lambda_exec.arn
-  handler          = "stop.handler"
-  runtime          = "python3.12"
-  filename         = archive_file.lambda_package.output_path
-  source_code_hash = archive_file.lambda_package.output_base64sha256
-  timeout          = 60
-  memory_size      = 512
+  function_name                  = "inference-on-demand-stop"
+  role                           = aws_iam_role.lambda_exec.arn
+  handler                        = "stop.handler"
+  runtime                        = "python3.12"
+  filename                       = archive_file.lambda_package.output_path
+  source_code_hash               = archive_file.lambda_package.output_base64sha256
+  timeout                        = 60
+  memory_size                    = 512
+  reserved_concurrent_executions = var.lambda_reserved_concurrent_executions
 
   depends_on = [aws_cloudwatch_log_group.stop]
 }
 
 resource "aws_lambda_function" "status" {
-  function_name    = "inference-on-demand-status"
-  role             = aws_iam_role.lambda_exec.arn
-  handler          = "status.handler"
-  runtime          = "python3.12"
-  filename         = archive_file.lambda_package.output_path
-  source_code_hash = archive_file.lambda_package.output_base64sha256
-  timeout          = 60
-  memory_size      = 512
+  function_name                  = "inference-on-demand-status"
+  role                           = aws_iam_role.lambda_exec.arn
+  handler                        = "status.handler"
+  runtime                        = "python3.12"
+  filename                       = archive_file.lambda_package.output_path
+  source_code_hash               = archive_file.lambda_package.output_base64sha256
+  timeout                        = 60
+  memory_size                    = 512
+  reserved_concurrent_executions = var.lambda_reserved_concurrent_executions
 
   depends_on = [aws_cloudwatch_log_group.status]
 }
 
 resource "aws_lambda_function" "authorizer" {
-  function_name    = "inference-on-demand-authorizer"
-  role             = aws_iam_role.lambda_exec.arn
-  handler          = "authorizer.handler"
-  runtime          = "python3.12"
-  filename         = archive_file.lambda_package.output_path
-  source_code_hash = archive_file.lambda_package.output_base64sha256
-  timeout          = 60
-  memory_size      = 512
+  function_name                  = "inference-on-demand-authorizer"
+  role                           = aws_iam_role.lambda_exec.arn
+  handler                        = "authorizer.handler"
+  runtime                        = "python3.12"
+  filename                       = archive_file.lambda_package.output_path
+  source_code_hash               = archive_file.lambda_package.output_base64sha256
+  timeout                        = 60
+  memory_size                    = 512
+  reserved_concurrent_executions = var.lambda_reserved_concurrent_executions
 
   depends_on = [aws_cloudwatch_log_group.authorizer]
 }
@@ -257,6 +261,11 @@ resource "aws_apigatewayv2_stage" "default" {
   api_id      = aws_apigatewayv2_api.http_api.id
   name        = "$default"
   auto_deploy = true
+
+  default_route_settings {
+    throttling_burst_limit = var.apigw_throttling_burst_limit
+    throttling_rate_limit  = var.apigw_throttling_rate_limit
+  }
 }
 
 resource "archive_file" "lambda_package" {
