@@ -22,8 +22,8 @@ variable "apigw_throttling_rate_limit" {
 }
 
 variable "lambda_reserved_concurrent_executions" {
-  description = "Maximum concurrent executions for each Lambda function (concurrency cap)"
+  description = "Maximum concurrent executions for each Lambda function (concurrency cap, or -1 for unreserved)"
   type        = number
-  default     = 2
+  default     = -1
 }
 
